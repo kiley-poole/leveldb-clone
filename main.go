@@ -62,6 +62,7 @@ func (m memTable) Has(key []byte) (ret bool, err error) {
 	return true, nil
 }
 
+//TODO: Add error handling
 func (m memTable) Put(key, value []byte) error {
 	m.table[string(key)] = string(value)
 	return nil
