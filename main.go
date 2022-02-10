@@ -78,27 +78,71 @@ func (m memTable) Delete(key []byte) error {
 }
 
 func (m memTable) RangeScan(start, limit []byte) (Iterator, error) {
-	rangeScan := RangeScanIterator{table: m.table, rangeKeys: make([]string, len(m.table))}
+	rangeScan := &RangeScanIterator{table: m.table, rangeKeys: make([]string, 0, len(m.table)), curIdx: 0}
 	for k := range m.table {
-		rangeScan.rangeKeys = append(rangeScan.rangeKeys, k)
+		if k >= string(start) && k <= string(limit) {
+			rangeScan.rangeKeys = append(rangeScan.rangeKeys, k)
+		}
+
 	}
 	sort.Strings(rangeScan.rangeKeys)
-	//TODO
-	return nil, nil
+	return rangeScan, nil
 }
 
-//TODO: flesh out iterator funcs - add incrementor to struct to handle position?
 type RangeScanIterator struct {
 	table     map[string]string
 	rangeKeys []string
+	curIdx    int
+}
+
+func (r *RangeScanIterator) Next() bool {
+	r.curIdx += 1
+	return r.curIdx < len(r.rangeKeys)
+}
+
+func (r RangeScanIterator) Error() error {
+	return nil
+}
+
+func (r RangeScanIterator) Value() []byte {
+	if r.curIdx >= len(r.rangeKeys) {
+		return nil
+	}
+	curVal := r.table[r.rangeKeys[r.curIdx]]
+	return []byte(curVal)
+}
+
+func (r RangeScanIterator) Key() []byte {
+	if r.curIdx >= len(r.rangeKeys) {
+		return nil
+	}
+	curKey := r.rangeKeys[r.curIdx]
+	return []byte(curKey)
 }
 
 func main() {
 	db := memTable{table: make(map[string]string)}
 
-	db.Put([]byte("test"), []byte("ans"))
+	db.Put([]byte("ab"), []byte("ans1"))
+	db.Put([]byte("b"), []byte("ans2"))
+	db.Put([]byte("c"), []byte("ans3"))
+	db.Put([]byte("d"), []byte("ans4"))
+	db.Put([]byte("e"), []byte("ans5"))
 	testVar, _ := db.Get([]byte("test"))
 	testHas, _ := db.Has([]byte("duh"))
+
+	iter, _ := db.RangeScan([]byte("ab"), []byte("c"))
+	fmt.Println(iter)
+	iter.Next()
+	fmt.Println(string(iter.Key()))
+	fmt.Println(string(iter.Value()))
+	iter.Next()
+	fmt.Println(string(iter.Key()))
+	fmt.Println(string(iter.Value()))
+	iter.Next()
+	fmt.Println(string(iter.Key()))
+	fmt.Println(string(iter.Value()))
+	iter.Next()
 
 	fmt.Printf("The key test has %s and the key duh is %t\n", testVar, testHas)
 
