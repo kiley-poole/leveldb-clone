@@ -8,10 +8,8 @@ type SSTable_entry struct {
 }
 
 type SSTable struct {
-	TableCount uint16
 	EntryCount uint16
 	StartKey   byte
 	EndKey     byte
-	TableSize  uint64
 	Entries    []SSTable_entry
 }
