@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"sort"
 )
 
@@ -43,7 +46,7 @@ type Iterator interface {
 }
 
 type memTable struct {
-	table map[string]string
+	table map[string][]byte
 }
 
 func (m memTable) Get(key []byte) (value []byte, err error) {
@@ -51,7 +54,7 @@ func (m memTable) Get(key []byte) (value []byte, err error) {
 	if !ok {
 		return nil, errors.New("key not found")
 	}
-	return []byte(val), nil
+	return val, nil
 }
 
 func (m memTable) Has(key []byte) (ret bool, err error) {
@@ -62,9 +65,8 @@ func (m memTable) Has(key []byte) (ret bool, err error) {
 	return true, nil
 }
 
-//TODO: Add error handling
 func (m memTable) Put(key, value []byte) error {
-	m.table[string(key)] = string(value)
+	m.table[string(key)] = value
 	return nil
 }
 
@@ -89,8 +91,40 @@ func (m memTable) RangeScan(start, limit []byte) (Iterator, error) {
 	return rangeScan, nil
 }
 
+// Flush the contents of the in-memory key/value database
+// to `w` in the form of an SSTable.
+func (m *memTable) flushSSTable(w io.Writer) error {
+
+	var tempkeys []string
+	for k := range m.table {
+		tempkeys = append(tempkeys, k)
+	}
+	sort.Strings(tempkeys)
+	entryCountBS := make([]byte, 2)
+	entryCount := len(tempkeys)
+	binary.BigEndian.PutUint16(entryCountBS, uint16(entryCount))
+	startLetter := []byte{tempkeys[0][0]}
+	endLetter := []byte{tempkeys[entryCount-1][0]}
+	w.Write(entryCountBS)
+	w.Write(startLetter)
+	w.Write(endLetter)
+	for _, key := range tempkeys {
+		keyLenBS := make([]byte, 2)
+		valLenBS := make([]byte, 2)
+		val := m.table[key]
+		binary.BigEndian.PutUint16(keyLenBS, uint16(len([]byte(key))))
+		binary.BigEndian.PutUint16(valLenBS, uint16(len(val)))
+		w.Write(keyLenBS)
+		w.Write(valLenBS)
+		w.Write([]byte(key))
+		w.Write(val)
+	}
+	m.table = make(map[string][]byte)
+	return nil
+}
+
 type RangeScanIterator struct {
-	table     map[string]string
+	table     map[string][]byte
 	rangeKeys []string
 	curIdx    int
 }
@@ -121,17 +155,20 @@ func (r RangeScanIterator) Key() []byte {
 }
 
 func main() {
-	db := memTable{table: make(map[string]string)}
+	db := memTable{table: make(map[string][]byte)}
 
-	db.Put([]byte("ab"), []byte("ans1"))
-	db.Put([]byte("b"), []byte("ans2"))
-	db.Put([]byte("c"), []byte("ans3"))
-	db.Put([]byte("d"), []byte("ans4"))
-	db.Put([]byte("e"), []byte("ans5"))
-	testVar, _ := db.Get([]byte("test"))
-	testHas, _ := db.Has([]byte("duh"))
-
-	iter, _ := db.RangeScan([]byte("ab"), []byte("c"))
+	db.Put([]byte("ant eater"), []byte("ans1"))
+	db.Put([]byte("cat"), []byte("ans1"))
+	db.Put([]byte("bison"), []byte("ans1"))
+	db.Put([]byte("fox"), []byte("ans2"))
+	db.Put([]byte("Aardvark"), []byte("ans3"))
+	db.Put([]byte("Dog"), []byte("ans4"))
+	db.Put([]byte("Elephant"), []byte("ans5"))
+	testVar, _ := db.Get([]byte("cat"))
+	testHas, _ := db.Has([]byte("ant eater"))
+	f, _ := os.Create("test.ldb")
+	db.flushSSTable(f)
+	iter, _ := db.RangeScan([]byte("a"), []byte("Z"))
 	fmt.Println(iter)
 	iter.Next()
 	fmt.Println(string(iter.Key()))
