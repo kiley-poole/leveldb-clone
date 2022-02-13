@@ -1,4 +1,4 @@
-package sstable
+package db
 
 type SSTable_entry struct {
 	KeyLength uint16
