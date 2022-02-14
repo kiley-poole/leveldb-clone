@@ -1,9 +1,7 @@
 package db
 
 import (
-	"encoding/binary"
 	"errors"
-	"io"
 	"sort"
 )
 
@@ -51,36 +49,4 @@ func (m MemTable) RangeScan(start, limit []byte) (Iterator, error) {
 	}
 	sort.Strings(rangeScan.rangeKeys)
 	return rangeScan, nil
-}
-
-// Flush the contents of the in-memory key/value database
-// to `w` in the form of an SSTable.
-func (m *MemTable) FlushSSTable(w io.Writer) error {
-
-	var tempkeys []string
-	for k := range m.Table {
-		tempkeys = append(tempkeys, k)
-	}
-	sort.Strings(tempkeys)
-	entryCountBS := make([]byte, 2)
-	entryCount := len(tempkeys)
-	binary.BigEndian.PutUint16(entryCountBS, uint16(entryCount))
-	startLetter := []byte{tempkeys[0][0]}
-	endLetter := []byte{tempkeys[entryCount-1][0]}
-	w.Write(entryCountBS)
-	w.Write(startLetter)
-	w.Write(endLetter)
-	for _, key := range tempkeys {
-		keyLenBS := make([]byte, 2)
-		valLenBS := make([]byte, 2)
-		val := m.Table[key]
-		binary.BigEndian.PutUint16(keyLenBS, uint16(len([]byte(key))))
-		binary.BigEndian.PutUint16(valLenBS, uint16(len(val)))
-		w.Write(keyLenBS)
-		w.Write(valLenBS)
-		w.Write([]byte(key))
-		w.Write(val)
-	}
-	m.Table = make(map[string][]byte)
-	return nil
 }
